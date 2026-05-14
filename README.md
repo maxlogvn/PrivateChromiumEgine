@@ -7,6 +7,18 @@
 
 Thư viện điều khiển trình duyệt Chromium chống bot detection, tích hợp fingerprint, proxy và quản lý profile đa phiên.
 
+Engine không sinh fingerprint ngẫu nhiên. 
+Thay vào đó, nó sử dụng fingerprint thu thập từ thiết bị thực tế, rồi inject trực tiếp vào Chromium ở cấp độ C/C++ trước khi trình duyệt chạy
+Mọi thuộc tính đều trả về giá trị native,
+không có dấu hiệu bị override dưới bất kỳ hình thức kiểm tra nào.
+
+không chỉ định tuyến traffic. Nó tự động đồng bộ toàn bộ môi trường trình duyệt theo IP proxy, tự động set WebRTC IP, local theo proxy
+
+Duy trì trạng thái đăng nhập, cookies, localStorage và lịch sử giữa các lần chạy:
+- Mỗi profile độc lập, được lưu theo đường dẫn tùy chọn
+- Tự động khôi phục fingerprint và proxy đã dùng ở phiên trước
+- Lưu profile khi đóng -- có thể chỉ định đường dẫn lưu khác nhau mỗi lần để tái sử dụng
+
 Được xây dựng trên nền `playwright-core` -- tương thích hoàn toàn với Playwright API hiện có, không cần viết lại code nghiệp vụ.
 
 **Tài liệu:** [Documentation](https://playwright.dev) | [API Reference](https://playwright.dev/docs/api/class-playwright)
@@ -17,12 +29,8 @@ Thư viện điều khiển trình duyệt Chromium chống bot detection, tích
 
 ## Yêu cầu hệ thống
 
-| Yêu cầu | Chi tiết |
-|---|---|
-| Hệ điều hành | Windows (bắt buộc) |
-| Node.js | 18+ |
-| Playwright | Cần cài `playwright-core` sebagai peer dependency |
-| Chromium | 149.0.7827.3 (đi kèm sẵn trong engine, đã được patch) |
+> [!WARNING]
+> Engine chỉ hoạt động trên hệ điều hành Windows, không thể cài đặt và sử dụng trên Linux, macOS và các hệ thống khác!
 
 ---
 
@@ -57,75 +65,17 @@ await page.goto('https://example.com');
 
 await Chromium.quit();
 ```
+> [Ghi Chú]
+> 
+> Tất cả method cấu hình (`use*`) trả về `this`, hỗ trợ method chaining.
+> Các method `use*` phải gọi trước `launch()`. Sau khi `launch()`, cấu hình bị khóa.
 
-Ghi chú:
-- Tất cả method cấu hình (`use*`) trả về `this`, hỗ trợ method chaining.
-- Các method `use*` phải gọi trước `launch()`. Sau khi `launch()`, cấu hình bị khóa.
 
----
-
-## Tính năng chính
-
-### 1. Fingerprint từ thiết bị thật, inject ở tầng C native
-
-Engine không sinh fingerprint ngẫu nhiên. Thay vào đó, nó sử dụng fingerprint thu thập từ thiết bị thực tế, rồi inject trực tiếp vào Chromium ở cấp độ C/C++. Mọi thuộc tính đều trả về giá trị native, không có dấu hiệu bị override dưới bất kỳ hình thức kiểm tra nào.
-
-**Navigator và Platform**
-- Navigator properties (thiết bị, trình duyệt, locale, OS)
-- Network headers `Accept-Language` và `User-Agent` tự động khớp với navigator
-- Kích thước và độ phân giải màn hình, inner/outer viewport
-- `devicePixelRatio` và HiDPI/Retina screen emulation
-
-**Đồ họa**
-- WebGL parameters, supported extensions, context attributes, shader precision formats
-- Canvas 2D -- thêm nhiễu chống canvas fingerprinting
-- Font fingerprinting (hỗ trợ FontPack đồng bộ font hệ thống)
-
-**Media và Hardware**
-- AudioContext sample rate, output latency, max channel count
-- Device voices và speech playback rates
-- Số lượng microphone, webcam, speaker available
-- Battery API, Sensor API (gia tốc kế, con quay hồi chuyển)
-- ClientRects và DOM element coordinates
-
-**Mạng và Vị trí**
-- WebRTC IP spoofing ở tầng protocol -- không thể bị detect qua JS
-- Geolocation, timezone, locale
 
 ---
 
-### 2. Proxy và môi trường thông minh
 
-Engine không chỉ định tuyến traffic. Nó tự động đồng bộ toàn bộ môi trường trình duyệt theo IP proxy:
-
-| Thuộc tính | Hành vi tự động |
-|---|---|
-| Timezone | Múi giờ khớp với vị trí địa lý của proxy |
-| Ngôn ngữ | `Accept-Language`, `navigator.language` theo quốc gia proxy |
-| Geolocation | Vị trí địa lý theo IP (tùy chọn) |
-| WebRTC | Che giấu hoặc thay thế IP rò rỉ |
-| DNS | Hỗ trợ `custom-proxy` và `custom-direct` để tránh DNS leak |
-| QUIC | Tùy chọn bật nếu proxy hỗ trợ UDP |
-
----
-
-### 3. Profile đa phiên
-
-Duy trì trạng thái đăng nhập, cookies, localStorage và lịch sử giữa các lần chạy:
-
-- Mỗi profile độc lập, được lưu theo đường dẫn tùy chọn
-- Tự động khôi phục fingerprint và proxy đã dùng ở phiên trước
-- Lưu profile khi đóng -- có thể chỉ định đường dẫn lưu khác nhau mỗi lần
-
----
-
-### 4. Tương thích Playwright 100%
-
-Trả về `BrowserContext` chuẩn của `playwright-core`. Toàn bộ API Playwright (`page`, `locator`, `expect`, `route`...) hoạt động bình thường -- không cần thay đổi code nghiệp vụ.
-
----
-
-## Hướng dẫn sử dụng chi tiết
+## Hướng dẫn sử dụng 
 
 ### Fingerprint
 

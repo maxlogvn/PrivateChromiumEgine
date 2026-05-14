@@ -7,9 +7,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
-/.tmp/
 /.idea/
 /.env
 /bun.lock
 /data/*
 .npmrc
+/tests/.tmp/

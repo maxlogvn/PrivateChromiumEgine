@@ -1,4 +1,4 @@
-import { BrowserContext, BrowserType } from 'playwright-core';
+import { BrowserType, BrowserContext } from 'playwright-core';
 
 /**
  * Tùy chọn cấu hình profile cho trình duyệt.
@@ -303,6 +303,125 @@ interface ProxyOptions {
 }
 
 /**
+ * Khoảng thời gian lọc fingerprint theo ngày thu thập.
+ * Dùng `*` để không giới hạn thời gian.
+ */
+type Time = '*' | '15 days' | '30 days' | '60 days';
+/**
+ * Tag lọc fingerprint theo thiết bị, hệ điều hành hoặc trình duyệt.
+ * Dùng `*` để không lọc theo tag.
+ */
+type Tag = '*' | 'Desktop' | 'Mobile' | 'Microsoft Windows' | 'Apple Mac' | 'Android' | 'Linux' | 'iPad' | 'iPhone' | 'Edge' | 'Chrome' | 'Safari' | 'Firefox' | 'YaBrowser' | 'Windows 7' | 'Windows 8' | 'Windows 10';
+/**
+ * Tùy chọn lọc và lấy fingerprint từ service.
+ *
+ * @example
+ * ```ts
+ * const fingerprint = await fetchFingerprint({
+ *   tags: ['Chrome', 'Desktop', 'Windows 10'],
+ *   timeLimit: '30 days',
+ *   minBrowserVersion: 'current',
+ *   maxBrowserVersion: 'current',
+ *   minWidth: 1280,
+ *   minHeight: 720,
+ * });
+ * ```
+ */
+interface FetchOptions {
+    /**
+     * Lọc fingerprint theo tag thiết bị, hệ điều hành hoặc trình duyệt.
+     * Không truyền để lấy fingerprint bất kỳ.
+     */
+    tags?: Tag[];
+    /**
+     * Lọc fingerprint theo ngày thu thập.
+     * Không truyền để không giới hạn thời gian.
+     */
+    timeLimit?: Time;
+    /**
+     * Chiều rộng màn hình tối thiểu của fingerprint (px).
+     */
+    minWidth?: number;
+    /**
+     * Chiều rộng màn hình tối đa của fingerprint (px).
+     */
+    maxWidth?: number;
+    /**
+     * Chiều cao màn hình tối thiểu của fingerprint (px).
+     */
+    minHeight?: number;
+    /**
+     * Chiều cao màn hình tối đa của fingerprint (px).
+     */
+    maxHeight?: number;
+    /**
+     * Phiên bản trình duyệt tối thiểu của fingerprint.
+     * Dùng `current` để tự động khớp với phiên bản trình duyệt đang cài.
+     * Nên dùng kết hợp với tag trình duyệt cụ thể (ví dụ `Chrome`).
+     */
+    minBrowserVersion?: number | 'current';
+    /**
+     * Phiên bản trình duyệt tối đa của fingerprint.
+     * Dùng `current` để tự động khớp với phiên bản trình duyệt đang cài.
+     * Đặt bằng `minBrowserVersion` để lọc đúng một phiên bản cụ thể.
+     */
+    maxBrowserVersion?: number | 'current';
+    /**
+     * Bật logging khi lấy fingerprint có dữ liệu PerfectCanvas.
+     *
+     * @default false
+     */
+    perfectCanvasLogs?: boolean;
+    /**
+     * Dữ liệu PerfectCanvas request dùng để render canvas chính xác theo fingerprint.
+     * Lấy request bằng ứng dụng CanvasInspector — xem hướng dẫn tại wiki của bablosoft.
+     * Chỉ cần lấy một lần cho mỗi site, không cần lấy lại cho từng fingerprint.
+     */
+    perfectCanvasRequest?: string;
+    /**
+     * Chỉ lấy fingerprint từ custom server (yêu cầu tài khoản đã bật tính năng này).
+     * Tương thích với PerfectCanvas.
+     *
+     * @default false
+     */
+    enableCustomServer?: boolean;
+    /**
+     * Cho phép render PerfectCanvas động từ các máy đang kết nối
+     * khi fingerprint chưa có trong database tĩnh.
+     * Tắt nếu muốn bỏ qua dynamic rendering để tiết kiệm thời gian.
+     * Không có hiệu lực nếu không truyền `perfectCanvasRequest`.
+     *
+     * @default true
+     */
+    dynamicPerfectCanvas?: boolean;
+    /**
+     * Cho phép truy vấn database tĩnh trước khi dùng dynamic rendering.
+     * Tắt nếu muốn bỏ qua database tĩnh và dùng dynamic rendering ngay lập tức.
+     * Không có hiệu lực nếu không truyền `perfectCanvasRequest` hoặc đang dùng custom server.
+     *
+     * @default true
+     */
+    enablePrecomputedFingerprints?: boolean;
+}
+
+type PluginLaunchOptions = Parameters<BrowserType['launchPersistentContext']>[1];
+type Launcher = Pick<BrowserType, 'launch' | 'launchPersistentContext'>;
+/**
+ * Factory function tao mot instance BrowserEngine moi.
+ *
+ * @example
+ * const browser = Chromium
+ *   .useFingerprint(fp)
+ *   .useProxy(proxy)
+ *   .launch();
+ *
+ * const context = await browser.newContext();
+ */
+declare const Chromium: ((privateKey?: string) => PWChromium) & {
+    launch: (options?: Partial<PluginLaunchOptions>) => PWChromium;
+};
+
+/**
  * Interface điều khiển trình duyệt Chromium với hỗ trợ fingerprint, proxy và profile.
  *
  * Các method cấu hình (`useFingerprint`, `useProxy`, `useProfile`, `usePrivateKey`)
@@ -328,17 +447,10 @@ interface ProxyOptions {
  */
 interface PWChromium {
     /**
-     * Thiết lập private key để xác thực với engine.
-     *
-     * Nếu không gọi, engine sẽ dùng key mặc định từ biến môi trường `BABLOSOFT_KEY`.
-     * Cần gọi trước `launch()`.
-     *
-     * @param privateKey - Key xác thực do bablosoft cung cấp.
-     *
-     * @example
-     * browser.usePrivateKey('your-private-key')
+     * Truy cập instance engine gốc (dùng cho các tác vụ nâng cao).
+     * Lưu ý: Sử dụng thuộc tính này có thể bỏ qua một số lớp bảo vệ của API chuẩn.
      */
-    usePrivateKey(privateKey: string): this;
+    readonly engine: object;
     /**
      * Thay thế Chromium mặc định bằng một launcher tùy chỉnh.
      *
@@ -351,7 +463,7 @@ interface PWChromium {
      * @example
      * browser.repackChromium(customLauncher)
      */
-    repackChromium(launcher: Launcher): this;
+    repackChromium(launcher: object): this;
     /**
      * Gắn fingerprint vào trình duyệt để giả lập thiết bị, tránh bị detect.
      *
@@ -368,7 +480,7 @@ interface PWChromium {
      *   safeWebGL: true,
      * })
      */
-    useFingerprint(data: string, options?: FingerprintOptions): this;
+    useFingerprint(data: string, options?: object): this;
     /**
      * Định tuyến toàn bộ traffic của trình duyệt qua proxy.
      *
@@ -385,7 +497,7 @@ interface PWChromium {
      *   changeWebRTC: 'replace',
      * })
      */
-    useProxy(data: string, options?: ProxyOptions): this;
+    useProxy(data: string, options?: object): this;
     /**
      * Liên kết thư mục profile với trình duyệt.
      *
@@ -403,7 +515,7 @@ interface PWChromium {
      *   loadFingerprint: true,
      * })
      */
-    useProfile(dirPath: string, options?: ProfileOptions): this;
+    useProfile(dirPath: string, options?: object): this;
     /**
      * Khởi tạo engine với toàn bộ cấu hình đã thiết lập.
      *
@@ -417,7 +529,7 @@ interface PWChromium {
      * @example
      * browser.launch({ headless: false })
      */
-    launch(options?: Partial<PluginLaunchOptions>): this;
+    launch(options?: object): this;
     /**
      * Tạo một `BrowserContext` để bắt đầu phiên duyệt web.
      *
@@ -452,8 +564,6 @@ interface PWChromium {
     quit(saveDataPath?: string): Promise<void>;
 }
 
-type PluginLaunchOptions = Parameters<BrowserType['launchPersistentContext']>[1];
-type Launcher = Pick<BrowserType, 'launch' | 'launchPersistentContext'>;
-declare const Chromium: PWChromium;
+declare const PACKAGE_PATH: string;
 
-export { Chromium };
+export { Chromium, type FetchOptions, type FingerprintOptions, type Launcher, PACKAGE_PATH, type PWChromium, type PluginLaunchOptions, type ProfileOptions, type ProxyOptions };
